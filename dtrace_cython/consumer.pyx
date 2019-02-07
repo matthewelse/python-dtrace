@@ -496,3 +496,35 @@ class DTraceConsumerThread(Thread):
         Used to check the status.
         """
         return self._stop.isSet()
+
+cdef class DTraceConsumerContext:
+    """
+    Run a thing in a helper thread to aggregate data.
+    """
+
+    def __init__(self, script, consume=True, chew_func=None, chewrec_func=None,
+                 out_func=None, walk_func=None, sleep=0):
+        self.thread = DTraceConsumerThread(script, consume, chew_func, chewrec_func,
+                                           out_func, walk_func, sleep) 
+
+    def __enter__(self):
+        # this is called when we enter the context
+        # equiv. to dtrace_thread.start()
+        self.thread.start()
+
+    def __exit__(self):
+        # tear everything down so we don't leak dtrace handles
+        # equiv to stop and join
+        self.thread.stop()
+        self.thread.join()
+
+        handle = self.thread.consumer.handle
+
+        if handle != NULL:
+            dtrace_stop(handle)
+            dtrace_close(handle)
+            
+            self.consumer.handle = NULL
+
+        del self.thread
+
